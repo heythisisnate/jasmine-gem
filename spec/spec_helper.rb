@@ -3,7 +3,7 @@ require "bundler"
 require 'stringio'
 require 'tmpdir'
 
-Bundler.setup(:default, :development)
+Bundler.require(:default, :development)
 
 def rspec2?
   Gem.available? "rspec", ">= 2.0"
@@ -18,10 +18,6 @@ if rspec2?
 else
   require 'spec'
 end
-
-$:.unshift(File.expand_path(File.join(File.dirname(__FILE__), "../lib")))
-
-require "jasmine"
 
 def create_rails(name)
   if rails3?
