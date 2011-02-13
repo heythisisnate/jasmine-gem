@@ -36,7 +36,7 @@ namespace :jasmine do
     puts "your tests are here:"
     puts "  http://localhost:8888/"
 
-    Jasmine::Config.new.start_server
+    Jasmine.configure!.start_server
   end
 end
 

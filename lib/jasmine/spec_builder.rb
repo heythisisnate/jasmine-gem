@@ -6,21 +6,18 @@ module Jasmine
 
     def initialize(config)
       @config = config
-      @spec_files = config.spec_files
-      @runner = config
       @spec_ids = []
     end
 
     def start
       guess_example_locations
-
-      @runner.start
+      @config.start
       load_suite_info
       wait_for_suites_to_finish_running
     end
 
     def stop
-      @runner.stop
+      @config.stop
     end
 
     def script_path
@@ -32,7 +29,7 @@ module Jasmine
 
       example_name_parts = []
       previous_indent_level = 0
-      @config.spec_files_full_paths.each do |filename|
+      @config.specs_full_paths.each do |filename|
         line_number = 1
         File.open(filename, "r") do |file|
           file.readlines.each do |line|
@@ -82,7 +79,6 @@ module Jasmine
     end
 
     def declare_suites
-      me = self
       suites.each do |suite|
         declare_suite(self, suite)
       end
@@ -152,11 +148,11 @@ module Jasmine
     private
 
     def eval_js(js)
-      @runner.eval_js(js)
+      @config.eval_js(js)
     end
 
     def json_generate(obj)
-      @runner.json_generate(obj)
+      @config.json_generate(obj)
     end
   end
 end

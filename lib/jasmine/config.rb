@@ -3,6 +3,98 @@ module Jasmine
     require 'yaml'
     require 'erb'
 
+    @@specs       = []
+    @@sources     = []
+    @@helpers     = []
+    @@stylesheets = []
+    @@mappings    = {}
+
+    class << self
+      def map_files(path, patterns)
+        dir = File.expand_path(path)
+        match_files(dir, patterns).map{|file| File.join(mapping_for(dir), file)}
+      end
+
+      def mapping_for(dir)
+        mapping = @@mappings[dir]
+        mapping ||= @@mappings[dir] = '/' if dir == src_dir
+        mapping ||= @@mappings[dir] = new_mapping
+        mapping
+      end
+
+      def new_mapping
+        "/__#{rand(10**30).to_s(36)}__"
+      end
+
+      def match_files(dir, patterns)
+        negative, positive = patterns.partition {|pattern| /^!/ =~ pattern}
+        chosen, negated = [positive, negative].collect do |patterns|
+          patterns.collect do |pattern|
+            matches = Dir.glob(File.join(dir, pattern.gsub(/^!/,'')))
+            matches.collect {|f| f.sub("#{dir}/", "")}.sort
+          end.flatten.uniq
+        end
+        chosen - negated
+      end
+
+      def simple_config
+        File.exist?(simple_config_file) ? YAML::load(ERB.new(File.read(simple_config_file)).result(binding)) || {} : {}
+      end
+
+      def project_root
+        Dir.pwd
+      end
+
+      def simple_config_file
+        File.join(project_root, 'spec/javascripts/support/jasmine.yml')
+      end      
+
+      def src_dir
+        File.join(*[project_root, simple_config['src_dir']].compact)
+      end
+
+      def spec_dir
+        File.join(project_root, simple_config['spec_dir'] || 'spec/javascripts')
+      end
+
+      def mappings
+        @@mappings
+      end
+
+      def create
+        add_helpers      spec_dir, simple_config['helpers']     || ["helpers/**/*.js"]
+        add_specs        spec_dir, simple_config['spec_files']  || ["**/*[sS]pec.js"]
+        add_stylesheets  src_dir,  simple_config['stylesheets']
+        add_sources      src_dir,  simple_config['src_files']
+        new
+      end
+    end
+
+    %w{ helpers specs sources stylesheets }.each do |file_type|
+      class_eval <<-EOF
+        def self.add_#{file_type}(path, patterns)
+          return if patterns.nil?
+          @@#{file_type}.concat map_files(path, patterns)
+        end
+
+        def #{file_type}
+          @@#{file_type}
+        end
+      EOF
+    end
+    
+    def spec_dir
+      self.class.spec_dir
+    end
+
+    def src_dir
+      self.class.src_dir
+    end
+
+    def mappings
+      @@mappings
+    end
+
     def browser
       ENV["JASMINE_BROWSER"] || 'firefox'
     end
@@ -80,98 +172,13 @@ module Jasmine
       @client.json_generate(obj)
     end
 
-    def match_files(dir, patterns)
-      dir = File.expand_path(dir)
-      negative, positive = patterns.partition {|pattern| /^!/ =~ pattern}
-      chosen, negated = [positive, negative].collect do |patterns|
-        patterns.collect do |pattern|
-          matches = Dir.glob(File.join(dir, pattern.gsub(/^!/,'')))
-          matches.collect {|f| f.sub("#{dir}/", "")}.sort
-        end.flatten.uniq
-      end
-      chosen - negated
-    end
-
-    def simple_config
-      config = File.exist?(simple_config_file) ? YAML::load(ERB.new(File.read(simple_config_file)).result(binding)) : false
-      config || {}
-    end
-
-    def spec_path
-      "/__spec__"
-    end
-
-    def root_path
-      "/__root__"
-    end
-
     def js_files(spec_filter = nil)
-      spec_files_to_include = spec_filter.nil? ? spec_files : match_files(spec_dir, [spec_filter])
-      src_files.collect {|f| "/" + f } + helpers.collect {|f| File.join(spec_path, f) } + spec_files_to_include.collect {|f| File.join(spec_path, f) }
+      spec_files_to_include = spec_filter.nil? ? specs : self.class.map_files(spec_dir, [spec_filter])
+      sources | helpers | spec_files_to_include
     end
 
-    def css_files
-      stylesheets.collect {|f| "/" + f }
-    end
-
-    def spec_files_full_paths
-      spec_files.collect {|spec_file| File.join(spec_dir, spec_file) }
-    end
-
-    def project_root
-      Dir.pwd
-    end
-
-    def simple_config_file
-      File.join(project_root, 'spec/javascripts/support/jasmine.yml')
-    end
-
-    def src_dir
-      if simple_config['src_dir']
-        File.join(project_root, simple_config['src_dir'])
-      else
-        project_root
-      end
-    end
-
-    def spec_dir
-      if simple_config['spec_dir']
-        File.join(project_root, simple_config['spec_dir'])
-      else
-        File.join(project_root, 'spec/javascripts')
-      end
-    end
-
-    def helpers
-      if simple_config['helpers']
-        match_files(spec_dir, simple_config['helpers'])
-      else
-        match_files(spec_dir, ["helpers/**/*.js"])
-      end
-    end
-
-    def src_files
-      if simple_config['src_files']
-        match_files(src_dir, simple_config['src_files'])
-      else
-        []
-      end
-    end
-
-    def spec_files
-      if simple_config['spec_files']
-        match_files(spec_dir, simple_config['spec_files'])
-      else
-        match_files(spec_dir, ["**/*[sS]pec.js"])
-      end
-    end
-
-    def stylesheets
-      if simple_config['stylesheets']
-        match_files(src_dir, simple_config['stylesheets'])
-      else
-        []
-      end
+    def specs_full_paths
+      specs.map{|file| file.gsub(@@mappings[spec_dir], spec_dir)}
     end
   end
 end

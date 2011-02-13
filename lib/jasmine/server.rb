@@ -28,8 +28,8 @@ module Jasmine
     #noinspection RubyUnusedLocalVariable
     def run(focused_suite = nil)
       jasmine_files = @jasmine_files
-      css_files = @jasmine_stylesheets + (@config.css_files || [])
-      js_files = @config.js_files(focused_suite)
+      stylesheets   = @jasmine_stylesheets + (@config.stylesheets || [])
+      js_files      = @config.js_files(focused_suite)
       body = ERB.new(File.read(File.join(File.dirname(__FILE__), "run.html.erb"))).result(binding)
       [
         200,
@@ -80,10 +80,11 @@ module Jasmine
 
       map('/run.html')         { run Jasmine::Redirect.new('/') }
       map('/__suite__')        { run Jasmine::FocusedSuite.new(config) }
-
       map('/__JASMINE_ROOT__') { run Rack::File.new(Jasmine.root) }
-      map(config.spec_path)    { run Rack::File.new(config.spec_dir) }
-      map(config.root_path)    { run Rack::File.new(config.project_root) }
+
+      config.mappings.each do |path, mapping|
+        map(mapping) { run Rack::File.new(path) } unless mapping == '/'
+      end
 
       map('/') do
         run Rack::Cascade.new([

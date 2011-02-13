@@ -3,29 +3,22 @@ require 'rack/test'
 
 describe "Jasmine.app" do
   include Rack::Test::Methods
-
-  def app
-    config = Jasmine::Config.new
-    config.stub!(:project_root).and_return(Jasmine.root)
-    config.stub!(:spec_dir).and_return(File.join(Jasmine.root, "spec"))
-    config.stub!(:src_dir).and_return(File.join(Jasmine.root, "src"))
-    config.stub!(:src_files).and_return(["file1.js"])
-    config.stub!(:spec_files).and_return(["file2.js"])
-    Jasmine.app(config)
+  before do
+    Jasmine::Config.add_sources(File.join(Jasmine.root, 'src'), ['**/*.js'])
+    Jasmine::Config.stub!(:spec_dir).and_return(File.join(Jasmine.root, "spec"))
+    Jasmine::Config.stub!(:src_dir).and_return(File.join(Jasmine.root, "src"))
+    @config = Jasmine.configure!
   end
 
-  it "should serve static files from spec dir under __spec__" do
-    get "/__spec__/suites/EnvSpec.js"
+  def app
+    Jasmine.app(@config)
+  end
+
+  it "serves dynamically mapped static files from spec dir" do
+    get @config.specs.find{|spec| spec =~ %r{/__\w+__/suites/EnvSpec.js}}
     last_response.status.should == 200
     last_response.content_type.should == "application/javascript"
     last_response.body.should == File.read(File.join(Jasmine.root, "spec/suites/EnvSpec.js"))
-    end
-
-  it "should serve static files from root dir under __root__" do
-    get "/__root__/src/base.js"
-    last_response.status.should == 200
-    last_response.content_type.should == "application/javascript"
-    last_response.body.should == File.read(File.join(Jasmine.root, "src/base.js"))
   end
 
   it "should serve static files from src dir under /" do
@@ -47,7 +40,7 @@ describe "Jasmine.app" do
     get "/__suite__/file2.js"
     last_response.status.should == 200
     last_response.content_type.should == "text/html"
-    last_response.body.should include("\"/__spec__/file2.js")
+    last_response.body.should =~ %r{/__\w+__/file2.js}
   end
 
   it "should redirect /run.html to /" do
@@ -65,9 +58,9 @@ describe "Jasmine.app" do
     it "should load each js file in order" do
       get "/"
       last_response.status.should == 200
-      last_response.body.should include("\"/file1.js")
-      last_response.body.should include("\"/__spec__/file2.js")
-      last_response.body.should satisfy {|s| s.index("/file1.js") < s.index("/__spec__/file2.js") }
+      last_response.body.should include("/Env.js")
+      last_response.body.should include("/EnvSpec.js")
+      last_response.body.should satisfy {|s| s.index("/Env.js") < s.index("/EnvSpec.js") }
     end
 
     it "should return an empty 200 for HEAD requests to /" do
